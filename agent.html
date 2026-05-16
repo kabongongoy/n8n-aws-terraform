@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent with Internet Search</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+    }
+
+    #chat-toggle {
+      position: fixed;
+      bottom: 24px;
+      left: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: #0f766e;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(15, 118, 110, 0.4);
+      transition: transform 0.2s, background 0.2s;
+      z-index: 1000;
+    }
+    #chat-toggle:hover { background: #0d6b64; transform: scale(1.05); }
+    #chat-toggle svg { width: 26px; height: 26px; fill: white; }
+    #chat-toggle .icon-close { display: none; }
+
+    #chat-window {
+      position: fixed;
+      bottom: 92px;
+      left: 24px;
+      width: 380px;
+      height: 540px;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 999;
+      transform: scale(0.85) translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      transform-origin: bottom left;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    #chat-window.open {
+      transform: scale(1) translateY(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .chat-header {
+      background: #0f766e;
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .chat-avatar {
+      width: 36px;
+      height: 36px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .chat-header-info h3 { font-size: 15px; font-weight: 600; }
+    .chat-header-info p { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+    .status-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      scroll-behavior: smooth;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+
+    .message { display: flex; flex-direction: column; max-width: 85%; animation: fadeIn 0.2s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .message.bot { align-self: flex-start; }
+    .message.user { align-self: flex-end; }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .bot .bubble { background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 4px; }
+    .user .bubble { background: #0f766e; color: white; border-bottom-right-radius: 4px; }
+
+    .search-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #0f766e;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 20px;
+      padding: 2px 8px;
+      margin-top: 4px;
+      width: fit-content;
+    }
+
+    .message-time { font-size: 11px; color: #94a3b8; margin-top: 4px; padding: 0 4px; }
+    .user .message-time { text-align: right; }
+
+    .typing .bubble { display: flex; align-items: center; gap: 4px; padding: 12px 16px; }
+    .typing .dot { width: 7px; height: 7px; background: #94a3b8; border-radius: 50%; animation: bounce 1.2s infinite; }
+    .typing .dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-6px); } }
+
+    .chat-input-area {
+      padding: 12px 16px;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+      background: #fff;
+    }
+    #chat-input {
+      flex: 1;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 14px;
+      resize: none;
+      outline: none;
+      max-height: 100px;
+      line-height: 1.4;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    #chat-input:focus { border-color: #0f766e; }
+    #chat-input::placeholder { color: #94a3b8; }
+
+    #send-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #0f766e;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, transform 0.1s;
+    }
+    #send-btn:hover { background: #0d6b64; }
+    #send-btn:active { transform: scale(0.93); }
+    #send-btn:disabled { background: #99f6e4; cursor: not-allowed; }
+    #send-btn svg { width: 18px; height: 18px; fill: white; }
+  </style>
+</head>
+<body>
+
+  <button id="chat-toggle" onclick="toggleChat()" aria-label="Open agent chat">
+    <svg class="icon-open" viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+    <svg class="icon-close" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  </button>
+
+  <div id="chat-window">
+    <div class="chat-header">
+      <div class="chat-avatar">🔍</div>
+      <div class="chat-header-info">
+        <h3>AI Agent</h3>
+        <p><span class="status-dot"></span>With internet search</p>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="message bot">
+        <div class="bubble">👋 Hi! I can answer questions directly or search the internet for current information. Try asking me about today's news!</div>
+        <span class="message-time">Just now</span>
+      </div>
+    </div>
+
+    <div class="chat-input-area">
+      <textarea id="chat-input" placeholder="Ask me anything..." rows="1"></textarea>
+      <button id="send-btn" onclick="sendMessage()" aria-label="Send">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = 'https://n8n.hoitcs.com.au/webhook/agent';
+
+    let isOpen = false;
+
+    function toggleChat() {
+      isOpen = !isOpen;
+      document.getElementById('chat-window').classList.toggle('open', isOpen);
+      document.querySelector('.icon-open').style.display = isOpen ? 'none' : 'block';
+      document.querySelector('.icon-close').style.display = isOpen ? 'block' : 'none';
+      if (isOpen) document.getElementById('chat-input').focus();
+    }
+
+    function getTime() {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function appendMessage(text, sender, searched) {
+      const messages = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = `message ${sender}`;
+
+      let badge = '';
+      if (sender === 'bot' && searched === true) {
+        badge = `<div class="search-badge">🔍 Searched the internet</div>`;
+      } else if (sender === 'bot' && searched === false) {
+        badge = `<div class="search-badge" style="color:#6366f1;background:#f5f3ff;border-color:#ddd6fe;">💡 Answered from knowledge</div>`;
+      }
+
+      div.innerHTML = `<div class="bubble">${text}</div>${badge}<span class="message-time">${getTime()}</span>`;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function showTyping() {
+      const messages = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = 'message bot typing';
+      div.id = 'typing-indicator';
+      div.innerHTML = `<div class="bubble"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>`;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function removeTyping() {
+      const el = document.getElementById('typing-indicator');
+      if (el) el.remove();
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('send-btn');
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      input.style.height = 'auto';
+      appendMessage(text, 'user', null);
+      sendBtn.disabled = true;
+      showTyping();
+
+      try {
+        const res = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text })
+        });
+
+        removeTyping();
+
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        const rawText = await res.text();
+        if (!rawText || !rawText.trim()) {
+          appendMessage('No response returned from the agent.', 'bot', null);
+        } else {
+          let reply, searched = null;
+          try {
+            // parse once — if result is still a string, parse again (double-encoded)
+            let data = JSON.parse(rawText);
+            if (typeof data === 'string') data = JSON.parse(data);
+            const d = Array.isArray(data) ? data[0] : data;
+            const text = d?.output || d?.reply || d?.message || d?.text || rawText;
+            reply = text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+            if (typeof d?.searched === 'boolean') searched = d.searched;
+          } catch {
+            reply = rawText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+          }
+          appendMessage(reply, 'bot', searched);
+        }
+      } catch (err) {
+        removeTyping();
+        appendMessage(`⚠️ ${err.message}`, 'bot', null);
+      } finally {
+        sendBtn.disabled = false;
+        input.focus();
+      }
+    }
+
+    document.getElementById('chat-input').addEventListener('input', function () {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+    });
+
+    document.getElementById('chat-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  </script>
+</body>
+</html>
