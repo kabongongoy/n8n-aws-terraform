@@ -5,7 +5,7 @@
 A fully local AI agent that runs entirely on your Windows PC — no cloud, no monthly API costs, no internet dependency for the AI itself. It uses:
 
 - **n8n** — the workflow engine (runs in Docker)
-- **Ollama** — runs your local LLM (GLM 4.7 Flash, 29B parameters)
+- **Ollama** — runs your local LLM (Gemma 4 4B, registered from GGUF file)
 - **SearXNG** — a self-hosted search engine (runs in Docker)
 
 The only time the internet is used is when SearXNG fetches search results — and that is just normal web browsing with no API key or cost.
@@ -560,12 +560,43 @@ ollama pull qwen2.5:7b
 
 ## Part 10: Performance Expectations
 
-| Model | First Response | Subsequent Responses | RAM Used |
-|---|---|---|---|
-| `llama3.2:latest` (3B) | ~5–10 sec | ~2–5 sec | ~3 GB |
-| `glm-4.7-flash:latest` (29B) | ~30–60 sec | ~10–20 sec | ~12–15 GB |
+| Model | Size | First Response | Subsequent Responses | RAM Used |
+|---|---|---|---|---|
+| `llama3.2:latest` (3B) | 2 GB | ~5–10 sec | ~2–5 sec | ~3 GB |
+| `gemma4-4b:latest` (4B) | 5 GB | ~15–30 sec | ~5–15 sec (direct) / 30–60 sec (search) | ~5 GB |
+| `glm-4.7-flash:latest` (29B) | 19 GB | ~30–60 sec | ~10–20 sec | ~12–15 GB |
 
-The first response after the model has been idle is slow because Ollama loads the model weights into memory. After that, responses are much faster.
+### Why the First Response is Slow
+
+Ollama unloads models from memory after 5 minutes of inactivity. The next request reloads model weights from disk into RAM — that is the slow part. Once warm, all subsequent responses are much faster.
+
+### Keep the Model Loaded Permanently
+
+To avoid cold start delays, prevent Ollama from ever unloading the model:
+
+```powershell
+# Set keep-alive to forever (-1 = never unload)
+[System.Environment]::SetEnvironmentVariable('OLLAMA_KEEP_ALIVE', '-1', 'User')
+# Restart Ollama from the system tray for this to take effect
+```
+
+Or keep a terminal open with the model running:
+
+```powershell
+ollama run gemma4-4b:latest
+# Leave this terminal open — type /bye to stop
+```
+
+### Search vs Direct Answer Speed
+
+For the agent workflow, search questions require two Ollama calls plus a SearXNG request:
+
+```
+Direct answer:  1x Ollama call            → 5–15 sec (warm)
+Search answer:  1x Ollama + SearXNG + 1x Ollama → 30–60 sec (warm)
+```
+
+The chatbot page shows **"⏳ Searching the web... this may take 1–2 minutes on CPU"** after 15 seconds so you know it is working and have not timed out.
 
 ---
 
@@ -624,13 +655,82 @@ Response: { "output": "I'm sorry...", "searched": false }
 
 ---
 
-## Part 12: Cost Summary
+## Part 12: Adding Models — Download vs Copy
+
+### Option A — Download via Ollama CLI
+
+```powershell
+ollama pull gemma4-4b:latest
+ollama pull qwen2.5:7b
+ollama pull llama3.1:8b
+```
+
+### Option B — Copy a GGUF File from Another Computer
+
+If you already have a model file (`.gguf`) on another machine, you can copy it directly without re-downloading. No internet required.
+
+**Step 1 — Copy the GGUF file to your PC:**
+
+Place it anywhere, for example:
+```
+C:\Users\PC\.ollama\models\gemma-4-E4B-it-Q4_K_M.gguf
+```
+
+**Step 2 — Create a Modelfile pointing to it:**
+
+Create a text file (e.g. `C:\Users\PC\.ollama\Modelfile-gemma4`) containing:
+```
+FROM C:\Users\PC\.ollama\models\gemma-4-E4B-it-Q4_K_M.gguf
+```
+
+**Step 3 — Register it with Ollama:**
+
+```powershell
+ollama create gemma4-4b -f "C:\Users\PC\.ollama\Modelfile-gemma4"
+```
+
+**Step 4 — Verify it appears:**
+
+```powershell
+ollama list
+# Should show: gemma4-4b:latest
+```
+
+**Step 5 — Test tool calling before using in the workflow:**
+
+```powershell
+$body = '{
+  "model": "gemma4-4b:latest",
+  "messages": [{"role":"user","content":"What is the latest news in Australia?"}],
+  "tools": [{"type":"function","function":{"name":"search_internet","description":"Search web","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}}],
+  "tool_choice": "auto",
+  "stream": false
+}'
+$r = Invoke-RestMethod "http://localhost:11434/v1/chat/completions" -Method POST -ContentType "application/json" -Body $body
+Write-Host "finish_reason:" $r.choices[0].finish_reason
+# Should say: tool_calls (meaning the model correctly decided to search)
+```
+
+### Switching Models in the Workflow
+
+Use the `switch_model.js` script (copy it into the container and run it), then Publish the workflow in n8n:
+
+```powershell
+docker cp C:\Users\PC\n8n-local\switch_model.js n8n-local:/tmp/switch_model.js
+docker exec n8n-local node /tmp/switch_model.js
+```
+
+Or manually edit the **Build First Request** and **Build Second Request** Code nodes in n8n and change the model name, then Publish.
+
+---
+
+## Part 13: Cost Summary
 
 | Component | Cost |
 |---|---|
 | n8n (Docker) | $0 |
 | SearXNG (Docker) | $0 |
-| Ollama + GLM model | $0 |
+| Ollama + Gemma 4 model | $0 |
 | Web search results (via SearXNG) | $0 |
 | **Total** | **$0** |
 

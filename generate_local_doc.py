@@ -373,17 +373,87 @@ add_code(
 # ═══════════════════════════════════════════════════════════════════════════════
 add_h1('Part 9: Performance')
 add_table(
-    ['Model', 'First Response', 'Subsequent', 'RAM Used'],
+    ['Model', 'Size', 'First Response', 'Subsequent', 'RAM Used'],
     [
-        ('llama3.2:latest (3B)',       '5–10 sec',  '2–5 sec',   '~3 GB'),
-        ('glm-4.7-flash:latest (29B)', '30–60 sec', '10–20 sec', '~12–15 GB'),
+        ('llama3.2:latest (3B)',       '2 GB',  '5–10 sec',  '2–5 sec',   '~3 GB'),
+        ('gemma4-4b:latest (4B)',      '5 GB',  '15–30 sec', '5–60 sec',  '~5 GB'),
+        ('glm-4.7-flash:latest (29B)', '19 GB', '30–60 sec', '10–20 sec', '~12–15 GB'),
     ]
 )
-add_note('The first response after the model has been idle is slow because '
-         'Ollama loads the model weights into memory. Subsequent responses are much faster.')
+
+add_h2('Cold Start vs Warm Responses')
+add_body(
+    'Ollama unloads models from memory after 5 minutes of inactivity. '
+    'The next request triggers a cold start — loading weights from disk into RAM. '
+    'Once warm, all subsequent responses are much faster.'
+)
+add_body('For search questions, the workflow makes two Ollama calls:')
+add_code(
+    'Direct answer:  1x Ollama call                        → 5–15 sec (warm)\n'
+    'Search answer:  1x Ollama + SearXNG + 1x Ollama  → 30–60 sec (warm)'
+)
+
+add_h2('Keep the Model Permanently Loaded')
+add_body('To avoid cold start delays, set OLLAMA_KEEP_ALIVE to never unload:')
+add_code(
+    '# PowerShell — set permanently for your user\n'
+    "[System.Environment]::SetEnvironmentVariable('OLLAMA_KEEP_ALIVE', '-1', 'User')\n"
+    '# Restart Ollama from the system tray for this to take effect'
+)
+
+add_h2('Chatbot Timeout Handling')
+add_body(
+    'The local chatbot page (agent-local.html) has a 4-minute fetch timeout. '
+    'After 15 seconds of waiting it shows "⏳ Searching the web... '
+    'this may take 1–2 minutes on CPU" so you know it is still working.'
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-add_h1('Part 10: How the Decision Works')
+add_h1('Part 10: Adding Models — Download vs Copy')
+
+add_h2('Option A — Download via Ollama CLI')
+add_code(
+    'ollama pull gemma4-4b:latest\n'
+    'ollama pull qwen2.5:7b\n'
+    'ollama pull llama3.1:8b'
+)
+
+add_h2('Option B — Copy a GGUF File from Another Computer')
+add_body(
+    'If you already have a model file (.gguf) on another machine, '
+    'copy it directly without re-downloading. No internet required.'
+)
+add_body('Step 1 — Copy the GGUF file to your PC, e.g.:')
+add_code(r'C:\Users\PC\.ollama\models\gemma-4-E4B-it-Q4_K_M.gguf')
+
+add_body('Step 2 — Create a Modelfile pointing to the file:')
+add_code(r'FROM C:\Users\PC\.ollama\models\gemma-4-E4B-it-Q4_K_M.gguf')
+
+add_body('Step 3 — Register it with Ollama:')
+add_code(r'ollama create gemma4-4b -f "C:\Users\PC\.ollama\Modelfile-gemma4"')
+
+add_body('Step 4 — Verify it appears and test tool calling:')
+add_code(
+    'ollama list   # should show gemma4-4b:latest\n'
+    '\n'
+    '# Test tool calling via OpenAI-compatible API:\n'
+    'Invoke-RestMethod http://localhost:11434/v1/chat/completions -Method POST ...\n'
+    '# finish_reason should be "tool_calls" for a news/current events question'
+)
+add_note(
+    'Always test tool calling before wiring a new model into the n8n workflow. '
+    'Not all GGUF models support function calling — verify with the test above first.'
+)
+
+add_h2('Switching Models in the Workflow')
+add_body('Use the switch script inside the container, then Publish in n8n:')
+add_code(
+    'docker cp C:\\Users\\PC\\n8n-local\\switch_model.js n8n-local:/tmp/switch_model.js\n'
+    'docker exec n8n-local node /tmp/switch_model.js'
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+add_h1('Part 11: How the Decision Works')
 
 add_h2('Example 1: Simple Question')
 add_code(
@@ -429,6 +499,6 @@ add_table(
 add_body('The only costs are electricity and your existing internet connection. '
          'No API keys, no subscriptions, no cloud bills.')
 
-output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation.docx'
+output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v2.docx'
 doc.save(output)
 print('Saved:', output)
