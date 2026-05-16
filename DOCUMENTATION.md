@@ -5,6 +5,7 @@
 Imagine you want a smart assistant that can:
 - Answer questions it already knows (like a textbook)
 - Search the internet when it needs fresh information (like a researcher)
+- Automatically block inappropriate or illicit search requests
 - Run 24/7 on your own server without paying for expensive API services
 
 That is exactly what this guide builds. Think of it like setting up your own mini Google + ChatGPT on a server you control.
@@ -1059,7 +1060,75 @@ This tells the frontend (chatbot page) whether to show a "Searched the internet"
 
 ---
 
-## Part 7: The Chatbot Frontend
+## Part 7: Content Guardrails
+
+Three layers of protection prevent inappropriate searches.
+
+### Layer 1 — SearXNG Strict Safe Search
+
+In `/opt/searxng/settings.yml`, safe search is set to level 2 (strict):
+
+```yaml
+search:
+  safe_search: 2    # 0=off, 1=moderate, 2=strict
+```
+
+This passes a safe search flag to Google, Bing, and DuckDuckGo so they filter explicit results before returning them. Restart SearXNG after changing:
+
+```bash
+cd /opt/searxng && sudo docker compose restart
+```
+
+### Layer 2 — LLM System Prompt Guardrail
+
+The system prompt instructs the LLM to refuse inappropriate requests before they reach the search stage:
+
+```
+IMPORTANT SAFETY RULES: You must immediately refuse any request that involves
+pornographic content, explicit sexual material, illegal activities, drug procurement,
+weapons, hate speech, or self-harm. Do NOT search for such content under any circumstances.
+```
+
+### Layer 3 — Query Filter Code Node
+
+A **Filter Query** Code node checks the generated query against a blocklist before it reaches SearXNG:
+
+```javascript
+const blocklist = [
+  'porn', 'pornography', 'xxx', 'nude', 'naked', 'sex video',
+  'explicit', 'onlyfans', 'escort', 'how to make drugs', 'buy drugs',
+  'how to kill', 'bomb making', 'dark web', 'csam'
+];
+
+const blocked = blocklist.some(word => query.includes(word));
+
+if (blocked) {
+  return [{ json: { blocked: true, refusal: "I'm sorry, I cannot search for that." } }];
+}
+return [{ json: { blocked: false, query: query } }];
+```
+
+### Updated Workflow Architecture
+
+```
+Get Search Query
+      ↓
+Filter Query  ← checks blocklist
+      ↓
+Is Blocked?
+  ↓ YES              ↓ NO
+Build Refusal    Search SearXNG (safe_search=2)
+  ↓                  ↓
+Respond Refused  Build Second Request → Groq → Respond
+```
+
+### Adding More Blocked Keywords
+
+Edit the `Filter Query` node in n8n and add words to the `blocklist` array. Save and publish — no restart needed.
+
+---
+
+## Part 8: The Chatbot Frontend
 
 ### What is the Frontend?
 
