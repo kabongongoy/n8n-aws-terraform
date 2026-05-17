@@ -123,7 +123,7 @@ add_body('A fully local AI agent that runs entirely on your Windows PC with zero
          'The only internet usage is when SearXNG fetches search results — normal web browsing, '
          'no API key required.')
 add_bullet('n8n — workflow engine (Docker container)')
-add_bullet('Ollama — runs GLM 4.7 Flash locally (29B parameters, 19GB)')
+add_bullet('Ollama — runs Gemma 4 4B locally (4B parameters, ~5GB, GGUF model)')
 add_bullet('SearXNG — self-hosted search engine (Docker container)')
 
 add_h2('Cloud vs Local Comparison')
@@ -146,7 +146,7 @@ add_code(
     '     ▼\n'
     'n8n (Docker container)\n'
     '     │\n'
-    '     ├──► Ollama (native Windows) → GLM 4.7 Flash\n'
+    '     ├──► Ollama (native Windows) → Gemma 4 4B\n'
     '     │         http://host.docker.internal:11434\n'
     '     │\n'
     '     └──► SearXNG (Docker container)\n'
@@ -250,7 +250,7 @@ add_h2('Available Models')
 add_table(
     ['Model', 'Size', 'Tool Calling', 'First Response', 'Quality'],
     [
-        ('gemma4-4b:latest', '19 GB', 'Yes', '30–60 sec', 'Excellent (29B)'),
+        ('gemma4-4b:latest', '5 GB',  'Yes', '15–30 sec', 'Good (4B)'),
         ('llama3.2:latest',      '2 GB',  'Yes', '5–10 sec',  'Good (3B, faster)'),
     ]
 )
@@ -314,7 +314,7 @@ add_table(
 add_h1('Part 6: Content Guardrails')
 add_body('Three layers of protection — identical to the cloud version:')
 add_bullet('Layer 1 — SearXNG safe_search: 2 (strict) — filters at search engine level')
-add_bullet('Layer 2 — LLM system prompt — instructs GLM to refuse inappropriate requests')
+add_bullet('Layer 2 — LLM system prompt — instructs the model to refuse inappropriate requests')
 add_bullet('Layer 3 — Filter Query Code node — keyword blocklist before SearXNG')
 add_note('The system prompt guardrail is the first line of defence. '
          'Most inappropriate requests are refused before the search tool is even called.')
@@ -327,7 +327,7 @@ add_code('const WEBHOOK_URL = "http://localhost:5678/webhook/agent-local";')
 add_body('Features:')
 add_bullet('"⚡ LOCAL" badge in the header — identifies this as the local version')
 add_bullet('"🔍 Searched the internet" badge — confirms SearXNG was used')
-add_bullet('"💡 Answered from knowledge" badge — confirms GLM answered directly')
+add_bullet('"💡 Answered from knowledge" badge — confirms model answered directly')
 add_bullet('"🚫 Request blocked" badge — confirms a guardrail was triggered')
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -459,8 +459,8 @@ add_h2('Example 1: Simple Question')
 add_code(
     'User: "what is 2 + 2?"\n'
     '        ↓\n'
-    'GLM thinks: "Basic maths — I know this. No search needed."\n'
-    'GLM returns: finish_reason = "stop"\n'
+    'Gemma thinks: "Basic maths — I know this. No search needed."\n'
+    'Gemma returns: finish_reason = "stop"\n'
     '        ↓\n'
     'IF node → FALSE → Respond Directly\n'
     'Response: { output: "4", searched: false }\n'
@@ -471,15 +471,15 @@ add_h2('Example 2: Current Events')
 add_code(
     'User: "latest news in Australia?"\n'
     '        ↓\n'
-    'GLM thinks: "This needs current info. I will search."\n'
-    'GLM returns: finish_reason = "tool_calls"\n'
+    'Gemma thinks: "This needs current info. I will search."\n'
+    'Gemma returns: finish_reason = "tool_calls"\n'
     '  query: "latest Australia news May 2026"\n'
     '        ↓\n'
     'Filter Query: not blocked ✅\n'
     '        ↓\n'
     'SearXNG → Google/Bing/DuckDuckGo → 30 results\n'
     '        ↓\n'
-    'GLM reads results → writes summary\n'
+    'Gemma reads results → writes summary\n'
     'Response: { output: "Here are today\'s stories...", searched: true }\n'
     'Chatbot: 🔍 Searched the internet'
 )
@@ -629,7 +629,7 @@ add_table(
     ['Component', 'Technology', 'Cost'],
     [
         ('Workflow engine',  'n8n in Docker',            '$0'),
-        ('LLM inference',    'Ollama + GLM 4.7 Flash',   '$0'),
+        ('LLM inference',    'Ollama + Gemma 4 4B',       '$0'),
         ('Web search',       'SearXNG in Docker',         '$0'),
         ('Search results',   'Google/Bing/DDG (via SearXNG)', '$0'),
         ('Total',            '',                          '$0'),
@@ -638,6 +638,6 @@ add_table(
 add_body('The only costs are electricity and your existing internet connection. '
          'No API keys, no subscriptions, no cloud bills.')
 
-output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v4.docx'
+output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v5.docx'
 doc.save(output)
 print('Saved:', output)
