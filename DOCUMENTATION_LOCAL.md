@@ -38,7 +38,7 @@ Your Browser
      ▼
 n8n (Docker container)
      │
-     ├──► Ollama (native on host) → GLM 4.7 Flash (29B)
+     ├──► Ollama (native on host) → Gemma 4 4B
      │         http://host.docker.internal:11434
      │
      └──► SearXNG (Docker container)
@@ -226,7 +226,7 @@ For this setup we use:
 
 | Model | Size | Tool Calling | Quality |
 |---|---|---|---|
-| `glm-4.7-flash:latest` | 19 GB | ✅ Yes | Excellent (29B params) |
+| `gemma4-4b:latest` | 5 GB  | ✅ Yes | Good (4B params) |
 | `llama3.2:latest` | 2.0 GB | ✅ Yes | Good (3B params, faster) |
 
 ### Ollama API Endpoints
@@ -312,7 +312,7 @@ The workflow is identical in structure to the cloud version. The only changes ar
 |---|---|---|
 | LLM URL | `https://api.groq.com/openai/v1/chat/completions` | `http://host.docker.internal:11434/v1/chat/completions` |
 | Auth header | `Authorization: Bearer API_KEY` | None needed |
-| Model | `qwen/qwen3-32b` | `glm-4.7-flash:latest` |
+| Model | `qwen/qwen3-32b` | `gemma4-4b:latest` |
 | SearXNG URL | `http://172.18.0.1:8080/search` | `http://host.docker.internal:8080/search` |
 | Arguments format | JSON string | Object (handled automatically) |
 
@@ -368,7 +368,7 @@ Use your own knowledge for timeless facts.
 IMPORTANT: Refuse any request involving pornography, illegal activities, drugs, weapons, hate speech.`;
 
 const body = JSON.stringify({
-  model: 'glm-4.7-flash:latest',
+  model: 'gemma4-4b:latest',
   messages: [
     { role: 'system', content: systemPrompt },
     { role: 'user',   content: userMessage }
@@ -549,7 +549,7 @@ To switch between models, update the model name in the **Build First Request** a
 model: 'llama3.2:latest'
 
 // Slower to load but much more capable
-model: 'glm-4.7-flash:latest'
+model: 'gemma4-4b:latest'
 ```
 
 ### Pull a New Model
@@ -567,7 +567,7 @@ ollama pull qwen2.5:7b
 |---|---|---|---|---|
 | `llama3.2:latest` (3B) | 2 GB | ~5–10 sec | ~2–5 sec | ~3 GB |
 | `gemma4-4b:latest` (4B) | 5 GB | ~15–30 sec | ~5–15 sec (direct) / 30–60 sec (search) | ~5 GB |
-| `glm-4.7-flash:latest` (29B) | 19 GB | ~30–60 sec | ~10–20 sec | ~12–15 GB |
+| `gemma4-4b:latest` (4B)  | 5 GB  | ~15–30 sec | ~5–15 sec  | ~5 GB     |
 
 ### Why the First Response is Slow
 
@@ -750,8 +750,8 @@ Windows PC
 │     └── searxng-local    → http://localhost:8080
 │
 └── Ollama (native Windows app)
-      └── glm-4.7-flash    → http://localhost:11434
-            (29B params, Q4 quantized, ~19GB)
+      └── gemma4-4b        → http://localhost:11434
+            (4B params, Q4_K_M quantized, ~5GB, GGUF copied from another PC)
 ```
 
 **What makes this different from the cloud version:**

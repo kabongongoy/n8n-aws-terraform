@@ -250,7 +250,7 @@ add_h2('Available Models')
 add_table(
     ['Model', 'Size', 'Tool Calling', 'First Response', 'Quality'],
     [
-        ('glm-4.7-flash:latest', '19 GB', 'Yes', '30–60 sec', 'Excellent (29B)'),
+        ('gemma4-4b:latest', '19 GB', 'Yes', '30–60 sec', 'Excellent (29B)'),
         ('llama3.2:latest',      '2 GB',  'Yes', '5–10 sec',  'Good (3B, faster)'),
     ]
 )
@@ -304,7 +304,7 @@ add_table(
     [
         ('LLM URL',      'https://api.groq.com/openai/v1/chat/completions', 'http://host.docker.internal:11434/v1/chat/completions'),
         ('Auth header',  'Authorization: Bearer API_KEY',                    'None needed'),
-        ('Model',        'qwen/qwen3-32b',                                   'glm-4.7-flash:latest'),
+        ('Model',        'qwen/qwen3-32b',                                   'gemma4-4b:latest'),
         ('SearXNG URL',  'http://172.18.0.1:8080/search',                   'http://host.docker.internal:8080/search'),
         ('Arguments',    'JSON string',                                       'Object (handled automatically)'),
     ]
@@ -361,7 +361,7 @@ add_code(
     "model: 'llama3.2:latest'\n"
     '\n'
     '// Slower but much more capable (19GB)\n'
-    "model: 'glm-4.7-flash:latest'"
+    "model: 'gemma4-4b:latest'"
 )
 
 add_h2('Pull a New Model')
@@ -377,7 +377,7 @@ add_table(
     [
         ('llama3.2:latest (3B)',       '2 GB',  '5–10 sec',  '2–5 sec',   '~3 GB'),
         ('gemma4-4b:latest (4B)',      '5 GB',  '15–30 sec', '5–60 sec',  '~5 GB'),
-        ('glm-4.7-flash:latest (29B)', '19 GB', '30–60 sec', '10–20 sec', '~12–15 GB'),
+        ('gemma4-4b:latest (4B)',  '5 GB',  '15–30 sec', '5–15 sec',  '~5 GB'),
     ]
 )
 
@@ -638,6 +638,6 @@ add_table(
 add_body('The only costs are electricity and your existing internet connection. '
          'No API keys, no subscriptions, no cloud bills.')
 
-output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v3.docx'
+output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v4.docx'
 doc.save(output)
 print('Saved:', output)
