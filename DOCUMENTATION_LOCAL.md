@@ -7,8 +7,10 @@ A fully local AI agent that runs entirely on your Windows PC — no cloud, no mo
 - **n8n** — the workflow engine (runs in Docker)
 - **Ollama** — runs your local LLM (Gemma 4 4B, registered from GGUF file)
 - **SearXNG** — a self-hosted search engine (runs in Docker)
+- **ngrok** — provides a permanent HTTPS tunnel so external services (Telegram, webhooks) can reach your local n8n
+- **Telegram Bot** — a chatbot that uses Ollama + SearXNG to answer messages with humour and real-time web search
 
-The only time the internet is used is when SearXNG fetches search results — and that is just normal web browsing with no API key or cost.
+The only time the internet is used is when SearXNG fetches search results and when Telegram sends/receives messages.
 
 ---
 
@@ -22,7 +24,8 @@ The only time the internet is used is when SearXNG fetches search results — an
 | HTTPS | Yes (via Caddy) | No (not needed locally) |
 | Cost | ~$18–20 AUD/month | $0 |
 | Accessible from internet | Yes | No (localhost only) |
-| Webhook from external services | Yes | No (localhost only) |
+| Webhook from external services | Yes | Yes (via ngrok HTTPS tunnel) |
+| Public HTTPS URL | Yes (Caddy) | Yes (ngrok static domain) |
 
 ---
 
@@ -753,8 +756,200 @@ Windows PC
 
 **What makes this different from the cloud version:**
 - Zero ongoing cost
-- Data never leaves your machine (except search queries)
-- Works without internet (except for search results)
-- No Caddy, no HTTPS, no domain name needed
-- Webhook only accessible from your PC (no external triggers)
+- Data never leaves your machine (except search queries and Telegram messages)
+- HTTPS provided by ngrok static domain (permanent URL, never changes)
+- External services like Telegram can reach your local n8n via ngrok
 - First response is slower (model loading time)
+
+---
+
+## Part 14: ngrok — HTTPS Tunnel for External Access
+
+Some services (like Telegram bots) require an HTTPS URL to send data to n8n. ngrok creates a secure tunnel from the internet to your local machine.
+
+### Why ngrok is Needed
+
+```
+Telegram servers  →  needs HTTPS URL  →  ngrok  →  http://localhost:5678  →  n8n
+```
+
+Without ngrok, Telegram cannot reach your local n8n because `localhost` is not accessible from the internet.
+
+### Static Domain Setup
+
+Rather than getting a new URL on every restart, ngrok provides a free permanent static domain. Your domain is:
+
+```
+https://prevailingly-bivariate-larhonda.ngrok-free.dev
+```
+
+This URL never changes. Configure ngrok to always use it:
+
+```powershell
+ngrok http --domain=prevailingly-bivariate-larhonda.ngrok-free.dev 5678
+```
+
+### Permanent URLs
+
+| Purpose | URL |
+|---|---|
+| n8n editor (local) | `http://localhost:5678` |
+| n8n editor (public) | `https://prevailingly-bivariate-larhonda.ngrok-free.dev` |
+| Agent webhook | `https://prevailingly-bivariate-larhonda.ngrok-free.dev/webhook/agent-local` |
+| Telegram webhook | Registered automatically when workflow is activated |
+
+### n8n docker-compose.yml with ngrok
+
+```yaml
+environment:
+  - N8N_HOST=prevailingly-bivariate-larhonda.ngrok-free.dev
+  - N8N_PORT=5678
+  - N8N_PROTOCOL=https
+  - WEBHOOK_URL=https://prevailingly-bivariate-larhonda.ngrok-free.dev/
+  - N8N_TRUST_PROXY=true
+```
+
+---
+
+## Part 15: Automatic Startup Script
+
+A PowerShell script at `C:\Users\PC\n8n-local\start-n8n.ps1` starts everything automatically on Windows login.
+
+### What It Does
+
+1. Starts Docker containers (n8n + SearXNG)
+2. Kills any existing ngrok process
+3. Starts ngrok with the permanent static domain
+4. Verifies the tunnel is active
+5. Prints all URLs for reference
+
+### Running It Manually
+
+```powershell
+C:\Users\PC\n8n-local\start-n8n.ps1
+```
+
+### Automatic Startup
+
+A shortcut is placed in the Windows Startup folder so it runs silently on every login:
+```
+C:\Users\PC\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\HOITCS n8n Startup.lnk
+```
+
+### After Every Restart
+
+Everything starts automatically. The only manual step is re-activating the Telegram workflow in n8n:
+
+1. Open n8n → **telegraph** workflow
+2. Toggle **Active off** then **Active on**
+
+This re-registers your ngrok URL with Telegram's servers. Required because Telegram stores the webhook URL — when the app restarts, Telegram must be told to send messages to the (same) URL again.
+
+---
+
+## Part 16: Telegram Bot Workflow
+
+A Telegram bot that receives messages and replies using Ollama with web search capability.
+
+### Bot Details
+
+| | |
+|---|---|
+| Bot name | hoitcs n8n chatbot |
+| Bot username | @hoitcs_n8n_bot |
+| n8n workflow | telegraph |
+| Trigger mode | Polling (Pull in events from Telegram) |
+
+### Workflow Architecture
+
+```
+Telegram Trigger (polling)
+        ↓
+Build Ollama Request (Code node)
+  - Injects today's date
+  - Includes search_internet tool definition
+        ↓
+Call Ollama (HTTP Request → Ollama)
+  - Model: gemma4-4b:latest
+        ↓
+Needs Search? (IF node)
+  - Checks finish_reason = "tool_calls"
+  ↓ YES                    ↓ NO
+Get Search Query      Extract Reply
+        ↓                   ↓
+Run Web Search         Send Telegram Reply
+(Execute Workflow)
+        ↓
+Build Second Request
+        ↓
+Call Ollama with Results
+        ↓
+Extract Reply
+        ↓
+Send Telegram Reply
+```
+
+### System Prompt
+
+```
+You are a helpful assistant that answers questions with humour and wit.
+But make it accurate, use emojis and colourful language 🎨🔥
+Today is {today's date}.
+You have a search tool called search_internet — use it for current events,
+news, sport results, weather, recent happenings.
+Use your own knowledge only for timeless facts.
+```
+
+### Testing the Bot
+
+1. Open Telegram and search for **@hoitcs_n8n_bot**
+2. Send any message
+3. In n8n → Telegram Trigger node → click **"Pull in events from Telegram"**
+4. The workflow executes and sends the reply back via Telegram
+
+### Important: Telegram Message Formatting
+
+The **Send Telegram Reply** node must NOT use Markdown parse mode. The LLM generates text with emoji and symbols that break Telegram's Markdown parser.
+
+In n8n, the Send Telegram Reply node parameters:
+```
+resource:     message
+operation:    sendMessage
+chatId:       ={{ $json.chatId }}
+text:         ={{ $json.reply }}
+additionalFields: {}   ← NO parse_mode
+```
+
+---
+
+## Part 17: Web Search Tool (Reusable Sub-Workflow)
+
+A reusable n8n sub-workflow that any other workflow can call to search the internet.
+
+### How to Call It
+
+Add an **"Execute Workflow"** node to any workflow:
+- Select **"Web Search Tool"** as the target workflow
+- Pass input: `{ "query": "your search term" }`
+- Returns: `{ query, results: [{title, url, content}], count }`
+
+### Internal Structure
+
+```
+Input (executeWorkflowTrigger v1)
+        ↓
+Validate Query (Code node)
+  - Rejects empty queries
+  - Applies content blocklist (pornography, illegal content, etc.)
+        ↓
+Search SearXNG (HTTP Request)
+  - GET http://host.docker.internal:8080/search
+  - Parameters: q, format=json, language=en
+        ↓
+Format Results (Code node)
+  - Returns top 5 results with title, url, content
+```
+
+### Using in the Telegram Bot
+
+The Web Search Tool is called by the **telegraph** workflow via the **"Run Web Search"** Execute Workflow node when Ollama decides to search (finish_reason = "tool_calls").

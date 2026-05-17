@@ -485,6 +485,145 @@ add_code(
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+add_h1('Part 14: ngrok — HTTPS Tunnel for External Access')
+add_body('Some services like Telegram bots require an HTTPS URL to send data to n8n. '
+         'ngrok creates a secure tunnel from the internet to your local machine.')
+
+add_h2('Why ngrok is Needed')
+add_code('Telegram servers  →  needs HTTPS  →  ngrok  →  localhost:5678  →  n8n')
+
+add_h2('Your Permanent Static Domain')
+add_body('ngrok provides one free static domain that never changes between restarts:')
+add_code('https://prevailingly-bivariate-larhonda.ngrok-free.dev')
+add_body('Start ngrok with this domain:')
+add_code('ngrok http --domain=prevailingly-bivariate-larhonda.ngrok-free.dev 5678')
+
+add_h2('Permanent URLs')
+add_table(
+    ['Purpose', 'URL'],
+    [
+        ('n8n editor (local)',   'http://localhost:5678'),
+        ('n8n editor (public)', 'https://prevailingly-bivariate-larhonda.ngrok-free.dev'),
+        ('Agent webhook',       'https://prevailingly-bivariate-larhonda.ngrok-free.dev/webhook/agent-local'),
+    ]
+)
+
+add_h2('n8n docker-compose.yml with ngrok')
+add_code(
+    'environment:\n'
+    '  - N8N_HOST=prevailingly-bivariate-larhonda.ngrok-free.dev\n'
+    '  - N8N_PROTOCOL=https\n'
+    '  - WEBHOOK_URL=https://prevailingly-bivariate-larhonda.ngrok-free.dev/\n'
+    '  - N8N_TRUST_PROXY=true'
+)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+add_h1('Part 15: Automatic Startup Script')
+add_body('A PowerShell script at C:\\Users\\PC\\n8n-local\\start-n8n.ps1 starts '
+         'everything automatically on Windows login.')
+add_body('What it does:')
+add_bullet('Starts Docker containers (n8n + SearXNG)')
+add_bullet('Kills any existing ngrok process')
+add_bullet('Starts ngrok with the permanent static domain')
+add_bullet('Verifies the tunnel is active and prints all URLs')
+
+add_h2('Run Manually')
+add_code('C:\\Users\\PC\\n8n-local\\start-n8n.ps1')
+
+add_h2('Automatic Startup')
+add_body('A shortcut in the Windows Startup folder runs it silently on every login:')
+add_code(r'C:\Users\PC\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\HOITCS n8n Startup.lnk')
+
+add_h2('After Every Restart — One Manual Step')
+add_body('Toggle the Telegram workflow off then on in n8n to re-register the webhook URL with Telegram.')
+add_note('Telegram stores the webhook URL on their servers. Even though the URL never changes '
+         '(static domain), n8n must re-register it after each restart.')
+
+# ═══════════════════════════════════════════════════════════════════════════════
+add_h1('Part 16: Telegram Bot Workflow')
+add_h2('Bot Details')
+add_table(
+    ['Setting', 'Value'],
+    [
+        ('Bot name',      'hoitcs n8n chatbot'),
+        ('Bot username',  '@hoitcs_n8n_bot'),
+        ('n8n workflow',  'telegraph'),
+        ('Trigger mode',  'Polling (Pull in events from Telegram)'),
+        ('Model',         'gemma4-4b:latest via Ollama'),
+    ]
+)
+
+add_h2('Workflow Architecture')
+add_code(
+    'Telegram Trigger (polling)\n'
+    '        ↓\n'
+    'Build Ollama Request — injects date + search tool\n'
+    '        ↓\n'
+    'Call Ollama\n'
+    '        ↓\n'
+    'Needs Search? (IF finish_reason = "tool_calls")\n'
+    '  ↓ YES                         ↓ NO\n'
+    'Get Search Query           Extract Reply\n'
+    '        ↓                        ↓\n'
+    'Run Web Search          Send Telegram Reply\n'
+    '        ↓\n'
+    'Build Second Request\n'
+    '        ↓\n'
+    'Call Ollama with Results\n'
+    '        ↓\n'
+    'Extract Reply → Send Telegram Reply'
+)
+
+add_h2('System Prompt')
+add_code(
+    'You are a helpful assistant that answers questions with humour and wit.\n'
+    'But make it accurate, use emojis and colourful language.\n'
+    'Today is {today}.\n'
+    'Use search_internet for current events, news, sport, weather.\n'
+    'Use your own knowledge for timeless facts.'
+)
+
+add_h2('Important: Telegram Message Formatting')
+add_body('The Send Telegram Reply node must NOT use Markdown parse mode. '
+         'The LLM response contains emoji and symbols that break Telegram\'s Markdown parser.')
+add_code(
+    'additionalFields: {}   # NO parse_mode — send as plain text'
+)
+add_note('If you see "Bad Request: can\'t parse entities" errors, check that '
+         'parse_mode is not set in the Send Telegram Reply node parameters.')
+
+# ═══════════════════════════════════════════════════════════════════════════════
+add_h1('Part 17: Web Search Tool (Reusable Sub-Workflow)')
+add_body('A reusable n8n sub-workflow that any workflow can call to search the internet. '
+         'Built once, usable everywhere.')
+
+add_h2('How to Use It in Any Workflow')
+add_bullet('Add an "Execute Workflow" node')
+add_bullet('Select "Web Search Tool" as the target')
+add_bullet('Pass input: { "query": "your search term" }')
+add_bullet('Returns: { query, results: [{title, url, content}], count }')
+
+add_h2('Internal Structure')
+add_code(
+    'Input (executeWorkflowTrigger v1)\n'
+    '        ↓\n'
+    'Validate Query\n'
+    '  - Rejects empty queries\n'
+    '  - Content blocklist (pornography, illegal content)\n'
+    '        ↓\n'
+    'Search SearXNG\n'
+    '  GET http://host.docker.internal:8080/search\n'
+    '        ↓\n'
+    'Format Results\n'
+    '  Returns top 5: title, url, content'
+)
+
+add_note('The trigger node must use typeVersion 1 (not 1.1). '
+         'Version 1.1 requires input schema definition before publishing; '
+         'version 1 accepts any data without a predefined schema.')
+
+# ═══════════════════════════════════════════════════════════════════════════════
 add_h1('Summary: Zero Cost, Fully Local')
 add_table(
     ['Component', 'Technology', 'Cost'],
@@ -499,6 +638,6 @@ add_table(
 add_body('The only costs are electricity and your existing internet connection. '
          'No API keys, no subscriptions, no cloud bills.')
 
-output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v2.docx'
+output = r'c:\Users\PC\OneDrive\Documents\claude\n8n\AI_Agent_Local_Documentation_v3.docx'
 doc.save(output)
 print('Saved:', output)
